@@ -43,6 +43,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Set up Gradle 8.3
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.3'
+
       - name: Install NDK + CMake (match project)
         run: |
           yes | sdkmanager --licenses >/dev/null || true
@@ -61,23 +66,10 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
 
-      - name: Generate Gradle wrapper (8.3)
-        run: |
-          # Generate the wrapper in an EMPTY dir so the host `gradle` doesn't
-          # try to evaluate our RN settings.gradle (which needs the wrapper).
-          tmp="$(mktemp -d)"
-          ( cd "$tmp" && gradle wrapper --gradle-version 8.3 )
-          mkdir -p android/gradle/wrapper
-          cp "$tmp/gradlew" android/gradlew
-          cp "$tmp/gradlew.bat" android/gradlew.bat
-          cp "$tmp/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/
-          cp "$tmp/gradle/wrapper/gradle-wrapper.properties" android/gradle/wrapper/
-          chmod +x android/gradlew
-          ./android/gradlew --version
-
       - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        # setup-gradle put Gradle 8.3 on PATH, so build directly — no wrapper.
+        run: gradle assembleRelease --stacktrace
 
       - name: Rename APK
         run: |
