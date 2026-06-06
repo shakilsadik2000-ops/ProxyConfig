@@ -76,7 +76,12 @@ jobs:
       - name: Commit build log on failure
         if: failure()
         run: |
-          tail -n 400 build-log.txt > build-error.txt || true
+          # Capture the actual Kotlin/compiler error lines plus the tail.
+          echo "===== compiler errors =====" > build-error.txt
+          grep -nE "^e: |^w: |error:|Compilation error|incompatible|was compiled" build-log.txt | head -n 80 >> build-error.txt || true
+          echo "" >> build-error.txt
+          echo "===== tail =====" >> build-error.txt
+          tail -n 200 build-log.txt >> build-error.txt || true
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f build-error.txt

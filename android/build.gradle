@@ -6,7 +6,8 @@ buildscript {
         compileSdkVersion = 34
         targetSdkVersion = 34
         ndkVersion = "25.1.8937393"
-        kotlinVersion = "1.8.10"
+        // 1.9.x is required by recent react-native-screens / gesture-handler.
+        kotlinVersion = "1.9.24"
     }
     repositories {
         google()
