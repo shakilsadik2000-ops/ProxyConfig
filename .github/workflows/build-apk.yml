@@ -1,0 +1,93 @@
+# Builds an installable, self-contained release APK (JS bundle included, signed
+# with a generated debug key so it installs without Play) and publishes it as a
+# GitHub Release for easy on-phone download.
+#
+# Run it from Actions → "Build APK" → Run workflow, or it runs automatically on
+# push to main when this file or app code changes.
+
+name: Build APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'android/**'
+      - 'App.tsx'
+      - 'index.js'
+      - 'package.json'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install NDK + CMake (match project)
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" \
+                     "ndk;25.1.8937393" "cmake;3.22.1"
+
+      - name: Install JS dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Generate debug keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore android/app/debug.keystore \
+            -storepass android -keypass android \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Generate Gradle wrapper (8.3)
+        working-directory: android
+        run: gradle wrapper --gradle-version 8.3
+
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             out/ProxyConfig-${{ github.run_number }}.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ProxyConfig-apk
+          path: out/*.apk
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: Proxy Config test APK #${{ github.run_number }}
+          files: out/*.apk
+          body: |
+            Self-contained release APK for testing. Install on an Android 8.0+
+            device (enable "Install unknown apps"). SOCKS5 profiles tunnel the
+            whole device; HTTP profiles are validated by Test Connection only.
