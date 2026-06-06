@@ -69,7 +69,19 @@ jobs:
       - name: Build release APK
         working-directory: android
         # setup-gradle put Gradle 8.3 on PATH, so build directly — no wrapper.
-        run: gradle assembleRelease --stacktrace
+        run: |
+          set -o pipefail
+          gradle assembleRelease --stacktrace 2>&1 | tee "$GITHUB_WORKSPACE/build-log.txt"
+
+      - name: Commit build log on failure
+        if: failure()
+        run: |
+          tail -n 400 build-log.txt > build-error.txt || true
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f build-error.txt
+          git commit -m "CI build error log [skip ci]" || true
+          git push || true
 
       - name: Rename APK
         run: |
