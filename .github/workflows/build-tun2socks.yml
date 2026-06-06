@@ -1,0 +1,77 @@
+# Builds the native tunnel engine (hev-socks5-tunnel) for Android and commits
+# the resulting libhev-socks5-tunnel.so into android/app/src/main/jniLibs/.
+#
+# The hev JNI symbols are bound to our own class via -DPKGNAME/-DCLSNAME so they
+# match com.proxyconfig.Tun2Socks (see Tun2Socks.kt).
+#
+# Trigger it from the GitHub "Actions" tab → "Build tun2socks engine" → Run
+# workflow. After it finishes the .so is both committed back to the repo AND
+# uploaded as a downloadable artifact.
+#
+# NOTE: this assumes the repository root is the ProxyConfig project folder
+# (the folder containing android/, package.json, etc.).
+
+name: Build tun2socks engine
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-tun2socks.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout app repo
+        uses: actions/checkout@v4
+
+      - name: Clone hev-socks5-tunnel (with submodules)
+        run: |
+          git clone --recursive --depth 1 \
+            https://github.com/heiher/hev-socks5-tunnel.git engine
+
+      - name: Build .so for all ABIs
+        working-directory: engine
+        run: |
+          set -e
+          NDK="$ANDROID_NDK_LATEST_HOME"
+          echo "Using NDK at: $NDK"
+          "$NDK/ndk-build" \
+            NDK_PROJECT_PATH=. \
+            APP_BUILD_SCRIPT=./Android.mk \
+            NDK_APPLICATION_MK=./Application.mk \
+            APP_ABI="arm64-v8a armeabi-v7a x86 x86_64" \
+            APP_PLATFORM=android-26 \
+            APP_CFLAGS="-O3 -DPKGNAME=com/proxyconfig -DCLSNAME=Tun2Socks"
+
+      - name: Copy artifacts into jniLibs
+        run: |
+          set -e
+          for abi in arm64-v8a armeabi-v7a x86 x86_64; do
+            mkdir -p "android/app/src/main/jniLibs/$abi"
+            cp "engine/libs/$abi/libhev-socks5-tunnel.so" \
+               "android/app/src/main/jniLibs/$abi/"
+          done
+          ls -lR android/app/src/main/jniLibs
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libhev-socks5-tunnel
+          path: android/app/src/main/jniLibs/**/libhev-socks5-tunnel.so
+
+      - name: Commit .so back to the repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f android/app/src/main/jniLibs/**/libhev-socks5-tunnel.so
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Build tun2socks engine (libhev-socks5-tunnel.so) [skip ci]"
+            git push
+          fi

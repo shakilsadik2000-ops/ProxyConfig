@@ -1,0 +1,27 @@
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# React Native / Metro
+.metro-health-check*
+.expo/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+*.keystore
+!debug.keystore
+android/.idea/
+android/.cxx/
+
+# tun2socks native binary is supplied separately (see README)
+# android/app/src/main/jniLibs/**/*.so
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
