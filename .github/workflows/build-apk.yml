@@ -62,8 +62,18 @@ jobs:
             -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Generate Gradle wrapper (8.3)
-        working-directory: android
-        run: gradle wrapper --gradle-version 8.3
+        run: |
+          # Generate the wrapper in an EMPTY dir so the host `gradle` doesn't
+          # try to evaluate our RN settings.gradle (which needs the wrapper).
+          tmp="$(mktemp -d)"
+          ( cd "$tmp" && gradle wrapper --gradle-version 8.3 )
+          mkdir -p android/gradle/wrapper
+          cp "$tmp/gradlew" android/gradlew
+          cp "$tmp/gradlew.bat" android/gradlew.bat
+          cp "$tmp/gradle/wrapper/gradle-wrapper.jar" android/gradle/wrapper/
+          cp "$tmp/gradle/wrapper/gradle-wrapper.properties" android/gradle/wrapper/
+          chmod +x android/gradlew
+          ./android/gradlew --version
 
       - name: Build release APK
         working-directory: android
