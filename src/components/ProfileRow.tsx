@@ -1,12 +1,13 @@
 /**
- * One row in the Profiles list. Shows name, protocol pill, host:port, an active
- * teal left border, and an amber expiry warning when expiry is within 3 days.
+ * One row in the Profiles list. White card; active profile gets a teal left
+ * accent + check + "ACTIVE" label. Protocol shown as a colored pill, host:port
+ * with a small server glyph, and a gear to edit. Amber expiry warning ≤3 days.
  */
 import React from 'react';
 import {Pressable, StyleSheet, Text, View} from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import {ProxyProfile} from '../types';
-import {colors, radius, spacing, typography} from '../theme/tokens';
+import {colors, protocolPill, radius, spacing, typography} from '../theme/tokens';
 import {daysUntil} from '../utils/format';
 
 interface Props {
@@ -19,6 +20,7 @@ interface Props {
 function ProfileRow({profile, active, onPress, onEdit}: Props): React.JSX.Element {
   const days = daysUntil(profile.expiryDate);
   const expiringSoon = days !== null && days <= 3;
+  const pill = protocolPill(profile.protocol);
 
   return (
     <Pressable
@@ -26,20 +28,25 @@ function ProfileRow({profile, active, onPress, onEdit}: Props): React.JSX.Elemen
       style={({pressed}) => [
         styles.row,
         active && styles.rowActive,
-        pressed && {opacity: 0.85},
+        pressed && {opacity: 0.9},
       ]}>
       <View style={styles.left}>
         <View style={styles.titleRow}>
           <Text style={styles.name} numberOfLines={1}>
             {profile.name}
           </Text>
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>{profile.protocol}</Text>
+          <View style={[styles.pill, {backgroundColor: pill.bg}]}>
+            <Text style={[styles.pillText, {color: pill.fg}]}>
+              {profile.protocol}
+            </Text>
           </View>
         </View>
-        <Text style={styles.host} numberOfLines={1}>
-          {profile.host}:{profile.port}
-        </Text>
+        <View style={styles.hostRow}>
+          <Icon name="server" size={13} color={colors.textMuted} />
+          <Text style={styles.host} numberOfLines={1}>
+            {profile.host}:{profile.port}
+          </Text>
+        </View>
         {expiringSoon && (
           <Text style={styles.expiry}>
             {days !== null && days < 0
@@ -49,9 +56,18 @@ function ProfileRow({profile, active, onPress, onEdit}: Props): React.JSX.Elemen
         )}
       </View>
 
-      <Pressable onPress={onEdit} hitSlop={12} style={styles.editBtn}>
-        <Icon name="edit-2" size={18} color={colors.textSecondary} />
-      </Pressable>
+      <View style={styles.right}>
+        {active ? (
+          <View style={styles.activeWrap}>
+            <Icon name="check-circle" size={20} color={colors.connected} />
+            <Text style={styles.activeText}>ACTIVE</Text>
+          </View>
+        ) : (
+          <Pressable onPress={onEdit} hitSlop={12} style={styles.editBtn}>
+            <Icon name="settings" size={18} color={colors.textMuted} />
+          </Pressable>
+        )}
+      </View>
     </Pressable>
   );
 }
@@ -62,14 +78,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: spacing.md,
     marginBottom: spacing.sm,
-    borderLeftWidth: 4,
-    borderLeftColor: 'transparent',
+    borderLeftWidth: 1,
   },
   rowActive: {
-    borderLeftColor: colors.primary,
-    backgroundColor: '#F0FDFA',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.connected,
+    backgroundColor: '#F2FBFA',
   },
   left: {flex: 1, marginRight: spacing.sm},
   titleRow: {flexDirection: 'row', alignItems: 'center'},
@@ -84,23 +102,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.sm,
-    backgroundColor: colors.border,
   },
-  pillText: {
-    fontSize: typography.sizes.xs,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
+  pillText: {fontSize: typography.sizes.xs - 1, fontWeight: '700'},
+  hostRow: {flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 6},
   host: {
-    marginTop: 2,
     fontSize: typography.sizes.sm,
     color: colors.textMuted,
+    fontFamily: 'monospace',
+    marginLeft: 6,
   },
   expiry: {
     marginTop: 4,
     fontSize: typography.sizes.xs,
     color: colors.connecting,
     fontWeight: '600',
+  },
+  right: {marginLeft: spacing.xs},
+  activeWrap: {alignItems: 'center'},
+  activeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.connected,
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
   editBtn: {padding: spacing.xs},
 });

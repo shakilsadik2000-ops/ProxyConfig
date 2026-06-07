@@ -1,8 +1,8 @@
 /**
- * Add / Edit Profile — validated form for a single proxy profile.
+ * Add / Edit Profile — validated form (Stitch redesign).
  *
- * Validates required fields and port range before save, supports a live
- * "Test Connection" probe (native, via the proxy), and an optional expiry date.
+ * Blue segmented protocol switch, icon-prefixed credential fields, a live
+ * "Test Connection" probe, optional expiry date, and a blue Save button.
  */
 import React, {useEffect, useState} from 'react';
 import {
@@ -39,6 +39,11 @@ interface FormErrors {
   port?: string;
 }
 
+const PROTOCOLS: {value: Protocol; label: string}[] = [
+  {value: 'HTTP', label: 'HTTP/S'},
+  {value: 'SOCKS5', label: 'SOCKS5'},
+];
+
 function AddEditProfileScreen(): React.JSX.Element {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Rt>();
@@ -58,7 +63,6 @@ function AddEditProfileScreen(): React.JSX.Element {
   const [testing, setTesting] = useState(false);
   const [createdAt, setCreatedAt] = useState<string | null>(null);
 
-  // Hydrate when editing an existing profile.
   useEffect(() => {
     if (!editingId) return;
     (async () => {
@@ -104,11 +108,10 @@ function AddEditProfileScreen(): React.JSX.Element {
     setTesting(true);
     try {
       const res = await VpnBridge.testConnection(buildProfile());
-      if (res.success) {
-        ToastAndroid.show(`Success — IP: ${res.ip}`, ToastAndroid.LONG);
-      } else {
-        ToastAndroid.show('Connection failed', ToastAndroid.LONG);
-      }
+      ToastAndroid.show(
+        res.success ? `Success — IP: ${res.ip}` : 'Connection failed',
+        ToastAndroid.LONG,
+      );
     } catch (e: any) {
       ToastAndroid.show(e?.message ?? 'Connection failed', ToastAndroid.LONG);
     } finally {
@@ -124,7 +127,7 @@ function AddEditProfileScreen(): React.JSX.Element {
       ToastAndroid.show('Profile updated', ToastAndroid.SHORT);
     } else {
       await profileStore.save(profile);
-      setActiveProfileId(profile.id); // first-time saves become active
+      setActiveProfileId(profile.id);
       ToastAndroid.show('Profile saved', ToastAndroid.SHORT);
     }
     navigation.goBack();
@@ -138,13 +141,12 @@ function AddEditProfileScreen(): React.JSX.Element {
         style={styles.flex}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled">
-        {/* Name */}
         <Field label="Profile Name" error={errors.name}>
           <TextInput
             style={styles.input}
             value={name}
             onChangeText={setName}
-            placeholder="US Proxy - Instagram"
+            placeholder="Work VPN Proxy"
             placeholderTextColor={colors.textMuted}
           />
         </Field>
@@ -152,78 +154,75 @@ function AddEditProfileScreen(): React.JSX.Element {
         {/* Protocol segmented control */}
         <Text style={styles.label}>Protocol</Text>
         <View style={styles.segment}>
-          {(['HTTP', 'SOCKS5'] as Protocol[]).map(p => (
+          {PROTOCOLS.map(p => (
             <Pressable
-              key={p}
-              onPress={() => setProtocol(p)}
+              key={p.value}
+              onPress={() => setProtocol(p.value)}
               style={[
                 styles.segmentItem,
-                protocol === p && styles.segmentItemActive,
+                protocol === p.value && styles.segmentItemActive,
               ]}>
               <Text
                 style={[
                   styles.segmentText,
-                  protocol === p && styles.segmentTextActive,
+                  protocol === p.value && styles.segmentTextActive,
                 ]}>
-                {p}
+                {p.label}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        {/* Host */}
-        <Field label="Host / IP" error={errors.host}>
+        <Field label="Host / IP Address" error={errors.host}>
           <TextInput
             style={styles.input}
             value={host}
             onChangeText={setHost}
             autoCapitalize="none"
             keyboardType="url"
-            placeholder="proxy.example.com or 1.2.3.4"
+            placeholder="proxy.company.com"
             placeholderTextColor={colors.textMuted}
           />
         </Field>
 
-        {/* Port */}
         <Field label="Port" error={errors.port}>
           <TextInput
             style={styles.input}
             value={port}
             onChangeText={setPort}
             keyboardType="number-pad"
-            placeholder="1080"
+            placeholder="8080"
             placeholderTextColor={colors.textMuted}
           />
         </Field>
 
-        {/* Username */}
-        <Field label="Username (optional)">
-          <TextInput
-            style={styles.input}
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-            placeholder="username"
-            placeholderTextColor={colors.textMuted}
-          />
-        </Field>
-
-        {/* Password with show/hide */}
-        <Field label="Password (optional)">
-          <View style={styles.passwordRow}>
+        <Field label="Username (Optional)">
+          <View style={styles.iconInput}>
+            <Icon name="user" size={18} color={colors.textMuted} />
             <TextInput
-              style={[styles.input, styles.passwordInput]}
+              style={styles.iconInputField}
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+              placeholder="admin_user"
+              placeholderTextColor={colors.textMuted}
+            />
+          </View>
+        </Field>
+
+        <Field label="Password (Optional)">
+          <View style={styles.iconInput}>
+            <Icon name="lock" size={18} color={colors.textMuted} />
+            <TextInput
+              style={styles.iconInputField}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
               autoCapitalize="none"
-              placeholder="password"
+              placeholder="••••••••"
               placeholderTextColor={colors.textMuted}
             />
-            <TouchableOpacity
-              style={styles.eyeBtn}
-              onPress={() => setShowPassword(s => !s)}
-              hitSlop={8}>
+            <TouchableOpacity onPress={() => setShowPassword(s => !s)} hitSlop={8}>
               <Icon
                 name={showPassword ? 'eye-off' : 'eye'}
                 size={20}
@@ -233,11 +232,8 @@ function AddEditProfileScreen(): React.JSX.Element {
           </View>
         </Field>
 
-        {/* Expiry date (optional) */}
-        <Field label="Expiry Date (optional)">
-          <TouchableOpacity
-            style={styles.input}
-            onPress={() => setShowDatePicker(true)}>
+        <Field label="Expiry Date (Optional)">
+          <TouchableOpacity style={styles.input} onPress={() => setShowDatePicker(true)}>
             <Text
               style={{
                 color: expiryDate ? colors.textPrimary : colors.textMuted,
@@ -265,33 +261,27 @@ function AddEditProfileScreen(): React.JSX.Element {
           />
         )}
 
-        {/* Test connection */}
-        <TouchableOpacity
-          style={styles.testBtn}
-          onPress={onTest}
-          disabled={testing}>
+        <TouchableOpacity style={styles.testBtn} onPress={onTest} disabled={testing}>
           {testing ? (
             <ActivityIndicator color={colors.primary} />
           ) : (
             <>
-              <Icon name="activity" size={18} color={colors.primary} />
+              <Icon name="wifi" size={18} color={colors.primary} />
               <Text style={styles.testText}>Test Connection</Text>
             </>
           )}
         </TouchableOpacity>
       </ScrollView>
 
-      {/* Save */}
       <View style={styles.footer}>
         <TouchableOpacity style={styles.saveBtn} onPress={onSave}>
-          <Text style={styles.saveText}>Save</Text>
+          <Text style={styles.saveText}>Save Profile</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-/** Labelled field wrapper with inline error text. */
 function Field({
   label,
   error,
@@ -316,7 +306,7 @@ const styles = StyleSheet.create({
   field: {marginBottom: spacing.md},
   label: {
     fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
+    color: colors.textPrimary,
     fontWeight: '600',
     marginBottom: spacing.xs,
   },
@@ -329,8 +319,24 @@ const styles = StyleSheet.create({
     fontSize: typography.sizes.md,
     color: colors.textPrimary,
     backgroundColor: colors.surface,
-    minHeight: 46,
+    minHeight: 50,
     justifyContent: 'center',
+  },
+  iconInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    minHeight: 50,
+  },
+  iconInputField: {
+    flex: 1,
+    marginLeft: spacing.sm,
+    fontSize: typography.sizes.md,
+    color: colors.textPrimary,
   },
   error: {
     marginTop: spacing.xs,
@@ -339,29 +345,24 @@ const styles = StyleSheet.create({
   },
   segment: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 3,
+    padding: 4,
     marginBottom: spacing.md,
   },
   segmentItem: {
     flex: 1,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.sm + 2,
     borderRadius: radius.sm,
     alignItems: 'center',
   },
   segmentItemActive: {backgroundColor: colors.primary},
   segmentText: {
-    fontSize: typography.sizes.md,
-    fontWeight: '600',
+    fontSize: typography.sizes.sm,
+    fontWeight: '700',
     color: colors.textSecondary,
   },
   segmentTextActive: {color: colors.white},
-  passwordRow: {position: 'relative', justifyContent: 'center'},
-  passwordInput: {paddingRight: 44},
-  eyeBtn: {position: 'absolute', right: spacing.md},
   clearDate: {
     marginTop: spacing.xs,
     color: colors.primary,
@@ -374,9 +375,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.primary,
-    borderRadius: radius.full,
-    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm + 2,
     marginTop: spacing.sm,
+    backgroundColor: '#EEF3FD',
   },
   testText: {
     color: colors.primary,
@@ -388,15 +390,16 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    backgroundColor: colors.background,
   },
   saveBtn: {
     backgroundColor: colors.primary,
-    borderRadius: radius.full,
+    borderRadius: radius.md,
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  saveText: {color: colors.white, fontWeight: '700', fontSize: typography.sizes.lg},
+  saveText: {color: colors.white, fontWeight: '700', fontSize: typography.sizes.md},
 });
 
 export default AddEditProfileScreen;

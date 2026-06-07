@@ -1,8 +1,6 @@
 /**
  * Profiles — list, select, edit, swipe-to-delete, and add proxy profiles.
- *
- * The active profile id lives in MMKV; tapping a row makes it active. Deleting
- * the active profile clears the active selection.
+ * Stitch redesign: white card rows, colored protocol pills, blue FAB.
  */
 import React, {useCallback, useState} from 'react';
 import {
@@ -78,9 +76,14 @@ function ProfileListScreen(): React.JSX.Element {
     <View style={styles.container}>
       {profiles.length === 0 ? (
         <View style={styles.empty}>
-          <Icon name="server" size={64} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>No profiles yet</Text>
-          <Text style={styles.emptyText}>Add your first proxy to begin.</Text>
+          <View style={styles.emptyChip}>
+            <Icon name="shield" size={28} color={colors.textSecondary} />
+          </View>
+          <Text style={styles.emptyTitle}>Secure Connections</Text>
+          <Text style={styles.emptyText}>
+            Your traffic is routed through the selected active profile. Use the
+            button below to add server configurations.
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -102,7 +105,6 @@ function ProfileListScreen(): React.JSX.Element {
         />
       )}
 
-      {/* FAB */}
       <TouchableOpacity
         style={styles.fab}
         activeOpacity={0.85}
@@ -136,23 +138,38 @@ const styles = StyleSheet.create({
     bottom: spacing.lg,
     width: 60,
     height: 60,
-    borderRadius: radius.full,
+    borderRadius: radius.md,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
   },
-  empty: {flex: 1, alignItems: 'center', justifyContent: 'center'},
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  emptyChip: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.chip,
+    backgroundColor: colors.surfaceChip,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
   emptyTitle: {
-    marginTop: spacing.md,
     fontSize: typography.sizes.lg,
     fontWeight: '700',
     color: colors.textPrimary,
   },
   emptyText: {
     marginTop: spacing.xs,
-    fontSize: typography.sizes.md,
+    fontSize: typography.sizes.sm,
     color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 

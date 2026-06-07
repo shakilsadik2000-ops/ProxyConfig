@@ -1,10 +1,9 @@
 /**
- * Home — the connect/disconnect hub.
+ * Home — the connect/disconnect hub (Stitch redesign).
  *
- * Reads the active profile (AsyncStorage + MMKV), reflects live VPN status from
- * the native service, shows uptime + current egress IP, and drives the
- * Connect / Disconnect action. Falls back to an empty state when no profile is
- * configured.
+ * Reads the active profile, reflects live VPN status, shows uptime + egress IP
+ * in bento cards, and drives the Connect / Disconnect action. Empty state when
+ * no profile is configured.
  */
 import React, {useCallback, useEffect, useState} from 'react';
 import {
@@ -27,8 +26,8 @@ import {VpnBridge} from '../native/VpnBridge';
 import {profileStore} from '../store/profileStore';
 import {getActiveProfileId, getSettings} from '../store/settingsStore';
 import {ProxyProfile} from '../types';
-import {colors, radius, spacing, typography} from '../theme/tokens';
-import {fmtUptime} from '../utils/format';
+import {clockString} from '../utils/format';
+import {colors, protocolPill, radius, spacing, typography} from '../theme/tokens';
 
 function HomeScreen(): React.JSX.Element {
   const navigation = useNavigation<any>();
@@ -38,7 +37,6 @@ function HomeScreen(): React.JSX.Element {
   const [profile, setProfile] = useState<ProxyProfile | null>(null);
   const [now, setNow] = useState(Date.now());
 
-  // Reload the active profile whenever Home regains focus.
   useFocusEffect(
     useCallback(() => {
       let alive = true;
@@ -53,26 +51,23 @@ function HomeScreen(): React.JSX.Element {
     }, []),
   );
 
-  // 1s ticker for the uptime counter (only meaningful while connected).
   useEffect(() => {
     if (status !== 'connected') return;
     const iv = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(iv);
   }, [status]);
 
-  // Surface native errors (e.g. kill switch blocking) as a toast.
   useEffect(() => {
     if (lastError) ToastAndroid.show(lastError, ToastAndroid.LONG);
   }, [lastError]);
 
   const settings = getSettings();
+  const connected = status === 'connected';
   const uptime =
-    status === 'connected' && connectedSince
-      ? fmtUptime(now - connectedSince)
-      : '—';
+    connected && connectedSince ? clockString(now - connectedSince) : '00:00:00';
 
   const onToggle = async () => {
-    if (status === 'connected') {
+    if (connected) {
       try {
         await VpnBridge.disconnect();
       } catch (e: any) {
@@ -92,15 +87,20 @@ function HomeScreen(): React.JSX.Element {
     }
   };
 
+  const pill = profile ? protocolPill(profile.protocol) : null;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* Top bar */}
       <View style={styles.topbar}>
-        <Text style={styles.appName}>Proxy Config</Text>
+        <View style={styles.brand}>
+          <Icon name="shield" size={22} color={colors.primary} />
+          <Text style={styles.appName}>Proxy Config</Text>
+        </View>
         <TouchableOpacity
           onPress={() => navigation.navigate('Settings')}
           hitSlop={12}>
-          <Icon name="settings" size={22} color={colors.textSecondary} />
+          <Icon name="user" size={22} color={colors.textSecondary} />
         </TouchableOpacity>
       </View>
 
@@ -109,9 +109,7 @@ function HomeScreen(): React.JSX.Element {
           <View style={styles.empty}>
             <Icon name="inbox" size={64} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No profile selected</Text>
-            <Text style={styles.emptyText}>
-              Add a proxy profile to get started.
-            </Text>
+            <Text style={styles.emptyText}>Add a proxy profile to get started.</Text>
             <TouchableOpacity
               style={styles.emptyBtn}
               onPress={() => navigation.navigate('Profiles')}>
@@ -120,19 +118,38 @@ function HomeScreen(): React.JSX.Element {
           </View>
         ) : (
           <>
-            <View style={styles.indicatorWrap}>
+            <View style={styles.statusSection}>
               <StatusIndicator status={status} />
+              <Text style={[styles.timer, !connected && {opacity: 0}]}>
+                {uptime}
+              </Text>
             </View>
 
-            <Text style={styles.profileName}>{profile.name}</Text>
-            <Text style={styles.ip}>
-              IP:{' '}
-              {status === 'connected' ? stats.currentIp : '—'}
-            </Text>
+            {/* Active profile card */}
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>ACTIVE PROFILE</Text>
+              <View style={styles.cardRow}>
+                <Text style={styles.profileName}>{profile.name}</Text>
+                <Icon name="server" size={20} color={colors.primary} />
+              </View>
+            </View>
 
-            <View style={styles.uptimeWrap}>
-              <Text style={styles.uptimeLabel}>Uptime</Text>
-              <Text style={styles.uptime}>{uptime}</Text>
+            {/* Proxy interface card */}
+            <View style={styles.card}>
+              <Text style={styles.cardLabel}>PROXY INTERFACE</Text>
+              <View style={styles.kvRow}>
+                <Text style={styles.kvKey}>Current IP</Text>
+                <Text style={styles.ipPill}>
+                  {connected ? stats.currentIp : '—'}
+                </Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.kvRow}>
+                <Text style={styles.kvKey}>Protocol</Text>
+                <Text style={[styles.protocol, {color: pill!.fg}]}>
+                  {profile.protocol}
+                </Text>
+              </View>
             </View>
 
             {settings.killSwitch && (
@@ -144,6 +161,9 @@ function HomeScreen(): React.JSX.Element {
 
             <View style={styles.btnWrap}>
               <ConnectionButton status={status} onPress={onToggle} />
+              <Text style={styles.btnHint}>
+                Securing connection via encrypted tunnel
+              </Text>
             </View>
           </>
         )}
@@ -159,51 +179,82 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    height: 56,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.surface,
   },
+  brand: {flexDirection: 'row', alignItems: 'center', gap: spacing.sm},
   appName: {
     fontSize: typography.sizes.xl,
     fontWeight: '700',
     color: colors.textPrimary,
+    marginLeft: spacing.sm,
   },
-  body: {
-    flexGrow: 1,
+  body: {paddingHorizontal: spacing.md, paddingBottom: spacing.xl},
+  statusSection: {alignItems: 'center', paddingVertical: spacing.xl},
+  timer: {
+    marginTop: spacing.sm,
+    fontSize: 13,
+    fontFamily: 'monospace',
+    color: colors.textSecondary,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  cardLabel: {
+    fontSize: typography.sizes.xs,
+    fontWeight: '600',
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+  },
+  cardRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    justifyContent: 'space-between',
   },
-  indicatorWrap: {marginTop: spacing.xl},
   profileName: {
-    marginTop: spacing.xl,
     fontSize: typography.sizes.lg,
     fontWeight: '600',
     color: colors.textPrimary,
   },
-  ip: {
-    marginTop: spacing.xs,
-    fontSize: typography.sizes.md,
-    color: colors.textSecondary,
+  kvRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
   },
-  uptimeWrap: {alignItems: 'center', marginTop: spacing.lg},
-  uptimeLabel: {
-    fontSize: typography.sizes.sm,
-    color: colors.textMuted,
-  },
-  uptime: {
-    marginTop: 2,
-    fontSize: typography.sizes.xl,
-    fontWeight: '700',
+  kvKey: {fontSize: typography.sizes.md, color: colors.textPrimary},
+  ipPill: {
+    fontFamily: 'monospace',
+    fontSize: 13,
     color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
+    backgroundColor: colors.surfaceAlt,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+  },
+  protocol: {fontSize: typography.sizes.sm, fontWeight: '600'},
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.xs,
   },
   killBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.md,
+    alignSelf: 'flex-start',
+    marginBottom: spacing.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: '#FFDAD6',
   },
   killText: {
     marginLeft: spacing.xs,
@@ -211,8 +262,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: typography.sizes.sm,
   },
-  btnWrap: {width: '100%', marginTop: spacing.xl},
-  empty: {flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 80},
+  btnWrap: {marginTop: spacing.lg},
+  btnHint: {
+    textAlign: 'center',
+    fontSize: typography.sizes.xs,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+  },
+  empty: {alignItems: 'center', justifyContent: 'center', paddingTop: 100},
   emptyTitle: {
     marginTop: spacing.md,
     fontSize: typography.sizes.lg,
@@ -230,7 +287,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radius.full,
+    borderRadius: radius.md,
   },
   emptyBtnText: {color: colors.white, fontWeight: '700'},
 });

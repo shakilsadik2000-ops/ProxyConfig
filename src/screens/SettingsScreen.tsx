@@ -1,16 +1,16 @@
 /**
- * Settings — connection, network and general preferences.
+ * Settings — connection, network and general preferences (Stitch redesign).
  *
- * Everything writes to MMKV immediately. Toggling the Kill Switch while
- * connected prompts for confirmation and restarts the tunnel so the change
- * takes effect (the flag is baked into the service at connect time).
+ * Grouped white cards with icon-chip rows, blue section headers, inline value
+ * pickers, and an informational highlight card. All changes persist to MMKV.
+ * Toggling Kill Switch while connected restarts the tunnel.
  */
 import React, {useState} from 'react';
 import {
   Alert,
-  Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   ToastAndroid,
   TouchableOpacity,
@@ -21,10 +21,14 @@ import {useNavigation} from '@react-navigation/native';
 import {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Icon from 'react-native-vector-icons/Feather';
 
-import ToggleRow from '../components/ToggleRow';
+import SettingRow from '../components/SettingRow';
 import {useVpnStatus} from '../hooks/useVpnStatus';
 import {VpnBridge} from '../native/VpnBridge';
-import {getSettings, updateSettings, getActiveProfileId} from '../store/settingsStore';
+import {
+  getSettings,
+  updateSettings,
+  getActiveProfileId,
+} from '../store/settingsStore';
 import {profileStore} from '../store/profileStore';
 import {AppSettings} from '../types';
 import {SettingsStackParamList} from '../navigation/AppNavigator';
@@ -39,18 +43,15 @@ function SettingsScreen(): React.JSX.Element {
   const {status} = useVpnStatus();
   const [settings, setSettings] = useState<AppSettings>(getSettings());
 
-  const apply = (partial: Partial<AppSettings>) => {
+  const apply = (partial: Partial<AppSettings>) =>
     setSettings(updateSettings(partial));
-  };
 
-  // Restart the active tunnel so a settings change is applied immediately.
   const restartConnection = async () => {
     const id = getActiveProfileId();
     const profile = id ? await profileStore.getById(id) : null;
     if (!profile) return;
     try {
       await VpnBridge.disconnect();
-      // Brief gap so the service tears down before re-establishing.
       setTimeout(() => {
         VpnBridge.connect(profile, getSettings()).catch(() => {});
       }, 800);
@@ -80,101 +81,138 @@ function SettingsScreen(): React.JSX.Element {
     }
   };
 
+  const cycle = <T,>(value: T, options: T[]): T =>
+    options[(options.indexOf(value) + 1) % options.length];
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <Text style={styles.header}>Settings</Text>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Settings</Text>
+      </View>
+
       <ScrollView contentContainerStyle={styles.body}>
-        {/* Connection */}
-        <Section title="Connection">
-          <ToggleRow
+        {/* Network security */}
+        <Text style={styles.section}>NETWORK SECURITY</Text>
+        <View style={styles.card}>
+          <SettingRow
+            icon="shield"
             title="Kill Switch"
-            description="Block all traffic if the proxy disconnects"
-            value={settings.killSwitch}
-            onValueChange={onKillSwitch}
+            subtitle="Block internet if proxy connection drops."
+            right={
+              <Switch
+                value={settings.killSwitch}
+                onValueChange={onKillSwitch}
+                trackColor={{false: colors.border, true: colors.primary}}
+                thumbColor={colors.white}
+              />
+            }
           />
           <Divider />
-          <ToggleRow
+          <SettingRow
+            icon="refresh-cw"
             title="Auto-Reconnect"
-            description="Automatically retry when the proxy drops"
-            value={settings.autoReconnect}
-            onValueChange={v => apply({autoReconnect: v})}
+            subtitle="Attempt to restore connection automatically."
+            right={
+              <Switch
+                value={settings.autoReconnect}
+                onValueChange={v => apply({autoReconnect: v})}
+                trackColor={{false: colors.border, true: colors.primary}}
+                thumbColor={colors.white}
+              />
+            }
           />
           {settings.autoReconnect && (
             <>
               <Divider />
-              <Text style={styles.subLabel}>Reconnect Interval</Text>
-              <OptionGroup
-                options={[
-                  {label: '5s', value: 5},
-                  {label: '10s', value: 10},
-                  {label: '30s', value: 30},
-                ]}
-                value={settings.reconnectIntervalSec}
-                onChange={v => apply({reconnectIntervalSec: v as number})}
+              <SettingRow
+                icon="clock"
+                title="Reconnect Interval"
+                subtitle="Delay between retry attempts."
+                onPress={() =>
+                  apply({
+                    reconnectIntervalSec: cycle(
+                      settings.reconnectIntervalSec,
+                      [5, 10, 30],
+                    ),
+                  })
+                }
+                right={<Value text={`${settings.reconnectIntervalSec}s`} />}
               />
             </>
           )}
-        </Section>
+        </View>
 
-        {/* Network */}
-        <Section title="Network">
-          <Text style={styles.subLabel}>DNS Server</Text>
-          <OptionGroup
-            options={[
-              {label: 'Auto', value: 'auto'},
-              {label: '8.8.8.8', value: '8.8.8.8'},
-              {label: '1.1.1.1', value: '1.1.1.1'},
-            ]}
-            value={settings.dnsServer}
-            onChange={v => apply({dnsServer: v as string})}
+        {/* Advanced */}
+        <Text style={styles.section}>ADVANCED CONFIGURATION</Text>
+        <View style={styles.card}>
+          <SettingRow
+            icon="git-branch"
+            title="Split Tunneling"
+            subtitle="Choose which apps bypass the proxy."
+            onPress={() => navigation.navigate('SplitTunneling')}
+            right={
+              <Icon name="chevron-right" size={20} color={colors.textMuted} />
+            }
           />
           <Divider />
-          <NavRow
-            label="Split Tunneling"
-            value={`${settings.splitTunneling.length} app${
-              settings.splitTunneling.length === 1 ? '' : 's'
-            } excluded`}
-            onPress={() => navigation.navigate('SplitTunneling')}
+          <SettingRow
+            icon="server"
+            title="DNS Server"
+            subtitle="Configure DNS resolution provider."
+            onPress={() =>
+              apply({
+                dnsServer: cycle(settings.dnsServer, [
+                  'auto',
+                  '8.8.8.8',
+                  '1.1.1.1',
+                ]),
+              })
+            }
+            right={
+              <Value
+                text={settings.dnsServer === 'auto' ? 'Auto' : settings.dnsServer}
+              />
+            }
           />
-        </Section>
+        </View>
 
         {/* General */}
-        <Section title="General">
-          <Text style={styles.subLabel}>Language</Text>
-          <OptionGroup
-            options={[
-              {label: 'English', value: 'en'},
-              {label: 'বাংলা', value: 'bn'},
-            ]}
-            value={settings.language}
-            onChange={v => {
-              apply({language: v as 'en' | 'bn'});
+        <Text style={styles.section}>GENERAL</Text>
+        <View style={styles.card}>
+          <SettingRow
+            icon="globe"
+            title="App Language"
+            subtitle="Default system language applied."
+            onPress={() => {
+              apply({language: settings.language === 'en' ? 'bn' : 'en'});
               ToastAndroid.show('Language preference saved', ToastAndroid.SHORT);
             }}
+            right={<Value text={settings.language === 'en' ? 'English' : 'বাংলা'} />}
           />
           <Divider />
-          <View style={styles.aboutRow}>
-            <Text style={styles.aboutLabel}>About</Text>
-            <Text style={styles.aboutValue}>Proxy Config v{APP_VERSION}</Text>
-          </View>
-        </Section>
+          <SettingRow
+            icon="info"
+            title="App Version"
+            subtitle={`v${APP_VERSION} (Build 2026)`}
+            right={
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>STABLE</Text>
+              </View>
+            }
+          />
+        </View>
+
+        {/* Highlight card */}
+        <View style={styles.highlight}>
+          <Icon name="check-circle" size={22} color={colors.white} />
+          <Text style={styles.highlightTitle}>Your connection is optimized</Text>
+          <Text style={styles.highlightText}>
+            Settings are saved instantly and applied to the active profile on the
+            next connection.
+          </Text>
+        </View>
       </ScrollView>
     </SafeAreaView>
-  );
-}
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionCard}>{children}</View>
-    </View>
   );
 }
 
@@ -182,136 +220,78 @@ function Divider(): React.JSX.Element {
   return <View style={styles.divider} />;
 }
 
-interface Option {
-  label: string;
-  value: string | number;
-}
-
-function OptionGroup({
-  options,
-  value,
-  onChange,
-}: {
-  options: Option[];
-  value: string | number;
-  onChange: (v: string | number) => void;
-}): React.JSX.Element {
+function Value({text}: {text: string}): React.JSX.Element {
   return (
-    <View style={styles.optionGroup}>
-      {options.map(opt => {
-        const active = opt.value === value;
-        return (
-          <Pressable
-            key={String(opt.value)}
-            onPress={() => onChange(opt.value)}
-            style={[styles.option, active && styles.optionActive]}>
-            <Text style={[styles.optionText, active && styles.optionTextActive]}>
-              {opt.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+    <View style={styles.value}>
+      <Text style={styles.valueText}>{text}</Text>
+      <Icon name="chevron-down" size={16} color={colors.primary} />
     </View>
-  );
-}
-
-function NavRow({
-  label,
-  value,
-  onPress,
-}: {
-  label: string;
-  value: string;
-  onPress: () => void;
-}): React.JSX.Element {
-  return (
-    <TouchableOpacity style={styles.navRow} onPress={onPress}>
-      <Text style={styles.navLabel}>{label}</Text>
-      <View style={styles.navRight}>
-        <Text style={styles.navValue}>{value}</Text>
-        <Icon name="chevron-right" size={20} color={colors.textMuted} />
-      </View>
-    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {flex: 1, backgroundColor: colors.background},
-  header: {
+  header: {paddingHorizontal: spacing.md, height: 56, justifyContent: 'center'},
+  headerTitle: {
     fontSize: typography.sizes.xl,
     fontWeight: '700',
     color: colors.textPrimary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
   },
   body: {padding: spacing.md, paddingTop: 0},
-  section: {marginBottom: spacing.lg},
-  sectionTitle: {
+  section: {
     fontSize: typography.sizes.sm,
     fontWeight: '700',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
+    color: colors.primary,
+    letterSpacing: 0.8,
+    marginTop: spacing.lg,
     marginBottom: spacing.sm,
-    letterSpacing: 0.5,
+    paddingHorizontal: 2,
   },
-  sectionCard: {
+  card: {
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    overflow: 'hidden',
   },
-  divider: {height: 1, backgroundColor: colors.border},
-  subLabel: {
-    fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
+  divider: {height: 1, backgroundColor: colors.border, marginHorizontal: spacing.md},
+  value: {flexDirection: 'row', alignItems: 'center', gap: 4},
+  valueText: {
+    color: colors.primary,
     fontWeight: '600',
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  optionGroup: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  option: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  optionActive: {backgroundColor: colors.primary, borderColor: colors.primary},
-  optionText: {
     fontSize: typography.sizes.sm,
-    color: colors.textSecondary,
-    fontWeight: '600',
+    marginRight: 4,
   },
-  optionTextActive: {color: colors.white},
-  navRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
+  badge: {
+    backgroundColor: colors.connectedContainer,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
   },
-  navLabel: {fontSize: typography.sizes.md, color: colors.textPrimary},
-  navRight: {flexDirection: 'row', alignItems: 'center'},
-  navValue: {
+  badgeText: {
+    color: colors.connectedOn,
+    fontWeight: '700',
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  highlight: {
+    marginTop: spacing.xl,
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+  },
+  highlightTitle: {
+    color: colors.white,
+    fontSize: typography.sizes.md,
+    fontWeight: '700',
+    marginTop: spacing.sm,
+  },
+  highlightText: {
+    color: '#D4DCFF',
     fontSize: typography.sizes.sm,
-    color: colors.textMuted,
-    marginRight: spacing.xs,
+    marginTop: spacing.xs,
+    lineHeight: 20,
   },
-  aboutRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-  },
-  aboutLabel: {fontSize: typography.sizes.md, color: colors.textPrimary},
-  aboutValue: {fontSize: typography.sizes.sm, color: colors.textMuted},
 });
 
 export default SettingsScreen;

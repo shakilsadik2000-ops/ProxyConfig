@@ -78,7 +78,7 @@ function SettingsNavigator(): React.JSX.Element {
       <SettingsStack.Screen
         name="SettingsHome"
         component={SettingsScreen}
-        options={{title: 'Settings'}}
+        options={{headerShown: false}}
       />
       <SettingsStack.Screen
         name="SplitTunneling"
